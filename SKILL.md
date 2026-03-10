@@ -10,6 +10,7 @@ description: |
 
   **前置条件：** 已有 SOUL.md（含角色名 + 形象图片字段）；已配置 neta-skills。
   **无需安装任何额外工具。**
+  **响应原则：每完成一个操作步骤立即输出反馈，不要等所有步骤都完成后再统一回复。**
 ---
 
 # Neta Travel — 自动旅行总规划
@@ -42,6 +43,11 @@ description: |
 
 ## Step 0 — 首次启动准备
 
+**收到 skill 触发后，立即回复（不要等读取完成）：**
+```
+🦞 收到！正在读取角色档案...
+```
+
 从 SOUL.md 提取：
 
 | 字段 | 说明 |
@@ -49,12 +55,16 @@ description: |
 | `- **名字**: 关羽` | → `character_name` |
 | `- **形象图片**: https://oss.talesofai.cn/picture/<uuid>.webp` | → `picture_uuid`（取 URL 中的 UUID） |
 
+**读取到角色名后立即输出（不等后续字段）：**
+```
+👤 角色：{character_name}，正在准备出发...
+```
+
 若 SOUL.md 缺少 `形象图片` 字段，**停止并提示**用户先完成 adopt。
 
-**立即输出开场：**
+**全部就绪后输出开场：**
 ```
-🦞 旅行开始！
-角色：{character_name}
+✅ 准备完毕，出发！
 正在随机发现第一个目的地...
 ```
 
@@ -77,9 +87,10 @@ pnpm start suggest_content \
 
 从返回的 `module_list` 中随机选取一个有效 `uuid`（跳过本次会话已访问过的）。
 
-**选定后立即输出：**
+**选定后立即输出（不等 read_collection）：**
 ```
 📍 目的地：{destination_name}
+正在读取玩法详情...
 ```
 
 ---
@@ -88,6 +99,11 @@ pnpm start suggest_content \
 
 ```bash
 pnpm start read_collection --uuid "<collection_uuid>"
+```
+
+**读取完成后立即输出：**
+```
+📖 玩法已加载，正在构建旅行方案...
 ```
 
 提取：
