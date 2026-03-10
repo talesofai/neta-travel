@@ -147,59 +147,52 @@ description: |
 
 当用户说「生成图鉴」/「看图鉴」/「相册」/「html」时触发。
 
-将本次会话所有成功旅行结果写成 HTML，保存到：
+### 📐 询问风格偏好
+
+触发后先询问用户想要什么风格：
+```
+想要什么风格的图鉴？（直接回车跳过用默认地图风格）
+例如：复古胶片 / 星空主题 / 像素游戏 / 极简白底...
+```
+
+若用户跳过或未输入，默认使用**互动地图风格**。
+
+### 🗺️ 默认风格：互动地图
+
+默认生成一张可交互的世界地图页面：
+- 每站旅行图片作为地图上的「地标点」，按照探索顺序分布
+- 点击任意地标，弹出放大原图 + 目的地名称 + 玩法链接 + 站次信息
+- 地图背景可以是手绘羊皮纸、像素地图、星图等有探险感的风格
+- 整体氛围与角色气质匹配
+
+### 🎨 用户自定义风格
+
+若用户指定了风格（如「复古」「极简」「赛博朋克」），自由发挥设计：
+- 不限于地图形式，可以是画廊、卡片墙、时间轴、杂志版式等
+- 保留**点击图片弹出放大原图 + 更多信息**的交互
+- 风格描述越具体，页面越贴合
+
+### 💾 保存与分享
+
+将 HTML 保存到：
 ```
 ~/.openclaw/workspace/pages/travel_{character_name}_{date}.html
 ```
 
-HTML 风格参考（深色主题卡片网格，无需展示技术细节给用户）：
-
-```html
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<title>{character_name} 的旅行图鉴</title>
-<style>
-  body { background: #0d1117; color: #e6edf3; font-family: sans-serif; margin: 0; padding: 24px; }
-  h1 { text-align: center; font-size: 2em; margin-bottom: 8px; }
-  .subtitle { text-align: center; color: #8b949e; margin-bottom: 32px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
-  .card { background: #161b22; border-radius: 12px; overflow: hidden; border: 1px solid #30363d; }
-  .card img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
-  .card-body { padding: 12px 16px; }
-  .round { font-size: 0.75em; color: #8b949e; margin-bottom: 4px; }
-  .dest { font-size: 0.95em; font-weight: bold; }
-  .dest a { color: #58a6ff; text-decoration: none; }
-  .dest a:hover { text-decoration: underline; }
-</style>
-</head>
-<body>
-<h1>🦞 {character_name} 的旅行图鉴</h1>
-<p class="subtitle">共探索 {success_count} 个世界 · {date}</p>
-<div class="grid">
-  <div class="card">
-    <img src="{image_url}" alt="{destination_name}" loading="lazy">
-    <div class="card-body">
-      <div class="round">第 {round} 站</div>
-      <div class="dest"><a href="{collection_url}" target="_blank">{destination_name}</a></div>
-    </div>
-  </div>
-</div>
-</body>
-</html>
-```
-
-**生成完毕后输出：**
+**生成完毕后立即输出分享链接（单独一行，方便 Discord 直接展开预览）：**
 ```
 📖 {character_name} 的旅行图鉴已封存！
-
-pages/travel_{character_name}_{date}.html
 
 🔗 https://claw-{username}-pages.talesofai.com/travel_{character_name}_{date}.html
 ```
 
-分享链接单独一行，方便直接复制。
+**生成后鼓励用户继续定制：**
+```
+想换个风格？告诉我关键词，马上重新生成 ✨
+例如：更暗黑一点 / 加上动画效果 / 改成横版时间轴...
+```
+
+用户每次提出修改，重新生成 HTML 并覆盖原文件，再次输出最新分享链接。
 
 ---
 
