@@ -1,7 +1,7 @@
 ---
 name: neta-travel
 description: |
-  让 Neta 角色随机旅行 —— 每次一站，展示图片后询问是否继续，积累 5 张后可生成 HTML 相册。
+  让 Neta 角色踏上随机冒险之旅 —— 每次一站，看图、决定要不要继续，集满 5 站可生成旅行图鉴。
 
   **主动触发时机（无需用户明确要求）：**
   - 刚完成 adopt 领养角色后，主动提议让 TA 去旅行
@@ -13,188 +13,122 @@ description: |
   **响应原则：每完成一个操作步骤立即输出反馈，不要等所有步骤都完成后再统一回复。**
 ---
 
-# Neta Travel — 自动旅行总规划
+# Neta Travel — 角色旅行冒险
 
-## 概览
+## 游戏概念
 
-每次执行**一站旅行**，完成后展示图片并询问用户是否继续。
-积累满 5 张成功图片后，提醒用户可生成 HTML 相册。
+角色将随机踏入 Neta 世界的各种奇妙场景，每一站都是未知的相遇。
+玩家决定旅行的节奏——继续探索，或随时收藏成图鉴。
 
+---
+
+## 开场
+
+从 SOUL.md 读取角色名与形象图片 UUID（`形象图片` URL 中的 UUID 段）。
+若缺少 `形象图片` 字段，停止并告知用户需要先完成领养。
+
+**收到触发后立即输出，不等读取完成：**
 ```
-首次启动
- ├─ 读取 SOUL.md → 获取角色名 + 形象图片UUID
- └─ 输出开场 → 开始第 1 站
+🦞 收到！正在唤醒角色...
+```
 
-每站流程
- ├─ suggest_content → 随机选一个玩法
- ├─ 输出：📍 目的地已发现
- ├─ read_collection → 读取玩法详情 + coreInput
- ├─ 输出：🎨 正在生成...
- ├─ make_image → 生成旅行图片
- ├─ 输出结果：站名 + 链接 + 图片（Discord 单行）
- ├─ 记录到本次会话的旅行列表
- └─ 询问用户：继续旅行？/ 生成相册？/ 结束？
+**读到角色名后立即输出：**
+```
+✨ {character_name} 苏醒了，整装待发...
+```
 
-满 5 张时
- └─ 额外提醒：已可生成旅行相册 HTML
+**就绪后输出：**
+```
+═══════════════════════════
+🗺️ {character_name} 的旅行冒险
+每一站都是随机的相遇，你来决定走多远。
+出发！
+═══════════════════════════
 ```
 
 ---
 
-## Step 0 — 首次启动准备
+## 每一站流程
 
-**收到 skill 触发后，立即回复（不要等读取完成）：**
+### 🎲 随机传送
+
+调用 `suggest_content`（page_size 20, intent recommend），从结果中随机选一个未去过的目的地。
+
+**选定后立即输出（不等读取详情）：**
 ```
-🦞 收到！正在读取角色档案...
-```
-
-从 SOUL.md 提取：
-
-| 字段 | 说明 |
-|------|------|
-| `- **名字**: 关羽` | → `character_name` |
-| `- **形象图片**: https://oss.talesofai.cn/picture/<uuid>.webp` | → `picture_uuid`（取 URL 中的 UUID） |
-
-**读取到角色名后立即输出（不等后续字段）：**
-```
-👤 角色：{character_name}，正在准备出发...
+🌀 传送门开启...
+📍 目的地锁定：{destination_name}
 ```
 
-若 SOUL.md 缺少 `形象图片` 字段，**停止并提示**用户先完成 adopt。
+### 📖 探索目的地
 
-**全部就绪后输出开场：**
-```
-✅ 准备完毕，出发！
-正在随机发现第一个目的地...
-```
-
----
-
-## Step 1 — 发现玩法
-
-**调用前输出：**
-```
-━━━━━━━━━━━━━━━━━━━━━━━━
-🗺️ 第 {round} 站出发中
-正在随机发现目的地...
-```
-
-```bash
-pnpm start suggest_content \
-  --page_index 0 --page_size 20 \
-  --scene agent_intent --intent recommend
-```
-
-从返回的 `module_list` 中随机选取一个有效 `uuid`（跳过本次会话已访问过的）。
-
-**选定后立即输出（不等 read_collection）：**
-```
-📍 目的地：{destination_name}
-正在读取玩法详情...
-```
-
----
-
-## Step 2 — 读取玩法详情
-
-```bash
-pnpm start read_collection --uuid "<collection_uuid>"
-```
+调用 `read_collection` 获取详情，提取 `collection.remix.launch_prompt.core_input` 作为生图模板。
 
 **读取完成后立即输出：**
 ```
-📖 玩法已加载，正在构建旅行方案...
+🔍 场景加载完毕，{character_name} 即将登场...
 ```
 
-提取：
-- `name` → 目的地名称
-- `collection.remix.launch_prompt.core_input` → 生图模板（coreInput）
+### 🎨 生成旅行图
 
-若 coreInput 为空，fallback：
+将 coreInput 中 `{@character}` / `{角色名称}` / `（角色名称）` 替换为 `{character_name}`。
+若 prompt 中无 `@{character_name}`，在开头追加。
+若有 `picture_uuid`，追加 `参考图-全图参考-{picture_uuid}`。
+
+无 coreInput 时用：`@{character_name}, {destination_name}, 梦幻风格, 高质量插画`
+
+调用 `make_image`（aspect 1:1）。
+
+**提交后立即输出：**
 ```
-@{character_name}, {destination_name}, 梦幻风格, 高质量插画
-```
-
----
-
-## Step 3 — 构建 Prompt
-
-1. 将 coreInput 中的占位符替换为角色：
-   - `{@character}` → `@{character_name}`
-   - `{角色名称}` / `{角色名}` / `（角色名称）` → `{character_name}`
-
-2. 若 prompt 中没有 `@{character_name}`，在开头追加。
-
-3. 若有 `picture_uuid`，确保 prompt 包含 `参考图-全图参考-{picture_uuid}`。
-
-**示例：**
-```
-@关羽, 参考图-全图参考-13dab6ed-bd69-4835-83f4-9fef9dd97998, 生成一幅7格漫画...
+🎨 画笔落下，旅行画面生成中...
 ```
 
----
+### 🖼️ 展示结果
 
-## Step 4 — 生成图片
-
-**提交前输出：**
+**生成成功后输出：**
 ```
-🎨 正在生成旅行图片，请稍候...
-```
-
-```bash
-pnpm start make_image \
-  --prompt "<构建好的prompt>" \
-  --aspect "1:1"
+━━━━━━━━━━━━━━━━━━━━━━━━
+第 {round} 站 · {destination_name}
 ```
 
-等待完成（PENDING → SUCCESS/FAILURE）。
-
----
-
-## Step 5 — 展示结果 + 询问
-
-**成功时输出：**
-```
-✅ 第 {round} 站 · {destination_name}
-🔗 {collection_url}
-```
-
-图片单独一行（Discord 自动展开）：
+图片 URL 单独一行（Discord 自动展开）：
 ```
 {image_url}
 ```
 
-**若已累积满 5 张成功图片，额外输出提醒：**
+**若已累积 5 张成功图片，额外输出：**
 ```
-📸 已完成 5 次旅行！可以输入「生成相册」查看完整旅行日记 HTML。
-```
-
-**询问用户下一步：**
-```
-继续旅行 🗺️ / 生成相册 📸 / 结束 👋
+📸 已解锁 5 站旅行！可以输入「生成图鉴」留下这段冒险。
 ```
 
-记录结果：
-```json
-{ "round": 1, "destination_name": "...", "collection_uuid": "...", "image_url": "...", "status": "SUCCESS" }
+**询问玩家下一步：**
+```
+继续冒险 🗺️ · 生成图鉴 📖 · 就此别过 👋
 ```
 
-> ⚠️ 若 FAILURE：输出失败提示，直接进入询问环节（不计入成功次数）。
-> ⚠️ 并发上限为 2，每次生成一张，等完成再发。
-> ⚠️ code 433：等待 5 秒后重试。
+> 若生成失败：输出 `⚠️ 这一站迷路了，换个目的地重来？` 然后进入询问。
+> 并发超限（code 433）：等 5 秒后重试，无需告知用户。
 
 ---
 
-## Step 6 — 生成 HTML 相册（用户触发）
+## 旅行图鉴（用户触发）
 
-当用户说「生成相册」/「看相册」/「html」时，用当前会话的所有成功结果生成：
+当用户说「生成图鉴」/「看图鉴」/「相册」/「html」时触发。
+
+将本次会话所有成功旅行结果写成 HTML，保存到：
+```
+~/.openclaw/workspace/pages/travel_{character_name}_{date}.html
+```
+
+HTML 风格参考（深色主题卡片网格，无需展示技术细节给用户）：
 
 ```html
 <!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>{character_name} 的旅行日记</title>
+<title>{character_name} 的旅行图鉴</title>
 <style>
   body { background: #0d1117; color: #e6edf3; font-family: sans-serif; margin: 0; padding: 24px; }
   h1 { text-align: center; font-size: 2em; margin-bottom: 8px; }
@@ -210,8 +144,8 @@ pnpm start make_image \
 </style>
 </head>
 <body>
-<h1>🦞 {character_name} 的旅行日记</h1>
-<p class="subtitle">共完成 {success_count} 次旅行 · {date}</p>
+<h1>🦞 {character_name} 的旅行图鉴</h1>
+<p class="subtitle">共探索 {success_count} 个世界 · {date}</p>
 <div class="grid">
   <div class="card">
     <img src="{image_url}" alt="{destination_name}" loading="lazy">
@@ -225,31 +159,16 @@ pnpm start make_image \
 </html>
 ```
 
-写入 `~/.openclaw/workspace/pages/travel_{character_name}_{date}.html`。
-
-> 💡 任何想公开分享的文件（HTML、Markdown 等）都可以放到 `~/.openclaw/workspace/pages/` 路径下，朋友可以通过公开域名直接访问。
-
-生成完成后输出：
+**生成完毕后输出：**
 ```
-📖 旅行日记已生成！
+📖 {character_name} 的旅行图鉴已封存！
 
-📂 文件路径：pages/travel_{character_name}_{date}.html
-🔗 分享链接：https://claw-{username}-pages.talesofai.com/travel_{character_name}_{date}.html
+pages/travel_{character_name}_{date}.html
+
+🔗 https://claw-{username}-pages.talesofai.com/travel_{character_name}_{date}.html
 ```
 
-> `{username}` 取当前 openclaw 用户名。分享链接单独一行展示，方便直接复制访问。
-
----
-
-## 注意事项
-
-| 情况 | 处理方式 |
-|------|---------|
-| SOUL.md 缺少 `形象图片` | 停止，提示先执行 adopt |
-| 生成 FAILURE | 输出提示，进入询问，不计入成功次数 |
-| 并发超限（code 433） | 等待 5 秒后重试 |
-| coreInput 为空 | 用 fallback 通用 prompt |
-| 用户说"结束" | 若有结果则询问是否先生成 HTML |
+分享链接单独一行，方便直接复制。
 
 ---
 
