@@ -28,6 +28,7 @@ Agent 作为"旅行规划师"，读取角色档案，连续完成 N 次随机旅
      ├─ read_collection → 读取玩法详情 + coreInput
      ├─ 构建 prompt（注入角色 + 参考图）
      ├─ make_image → 生成旅行图片
+     ├─ 立即输出：站名 + 链接 + 图片URL（Discord 单行展示）
      └─ 记录结果（玩法名 + 图片URL）
  └─ 生成 HTML 展示页（写入本地文件）
 ```
@@ -70,7 +71,7 @@ pnpm start read_collection --uuid "<collection_uuid>"
 
 提取：
 - `name` → 目的地名称
-- `cta_info.launch_prompt.core_input` → 生图模板（coreInput）
+- `collection.remix.launch_prompt.core_input` → 生图模板（coreInput）
 
 若 coreInput 为空，fallback 模板：
 ```
@@ -113,7 +114,21 @@ pnpm start make_image \
 
 等待任务完成（状态从 PENDING → SUCCESS/FAILURE）。
 
-记录结果：
+**每次生成完成后立即输出结果，不等待后续轮次：**
+
+```
+🗺️ 第 {round} 站 · {destination_name}
+🔗 {collection_url}
+```
+
+图片用 Discord 图片嵌入格式单独一行展示：
+```
+{image_url}
+```
+
+然后继续下一轮旅行。
+
+记录结果供最终 HTML 使用：
 ```json
 {
   "round": 1,
@@ -124,7 +139,7 @@ pnpm start make_image \
 }
 ```
 
-> ⚠️ 若返回 FAILURE：记录失败，继续下一轮，不中断整体流程。
+> ⚠️ 若返回 FAILURE：输出失败提示，继续下一轮，不中断整体流程。
 > ⚠️ 并发上限为 2，每次生成一张，等完成再发下一个。
 
 ---
