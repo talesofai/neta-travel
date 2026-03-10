@@ -63,51 +63,108 @@ description: |
 
 ---
 
-## 每一站流程
+## 执行步骤（精确流程）
 
-### 🎲 随机传送
+> 以下为实测校准过的完整执行顺序，每步预期耗时已标注。Agent 请严格按此顺序调用，**每步完成后立即输出对应反馈，不要等全部完成再回复**。
 
-调用 `suggest_content`（page_size 20, intent recommend），从结果中随机选一个未去过的目的地。
+### Step 1 · 读取角色档案（本地，<1ms）
 
-**选定后立即输出（不等读取详情）：**
+从 SOUL.md 读取：
+- `名字` 字段 → `character_name`（去除末尾「（龙虾化）」后缀）
+- `形象图片` 或 `龙虾图片` 字段 URL → 提取路径中的 UUID → `picture_uuid`
+
+若缺少 `形象图片`，停止并提示用户先完成 adopt 领养。
+
+### Step 2 · 发现目的地（~80ms）
+
+**第 1 站固定使用「浴室场景」**（已验证稳定，约 18s 出图）：
+```
+collection_uuid: 9251d699-86d4-4ebd-b648-26c939e55bc6
+```
+
+第 2 站起调用 `suggest_content` 随机发现新目的地：
+```
+recsys.suggestContent({
+  page_index: 0, page_size: 5, scene: "agent_intent",
+  business_data: { intent: "recommend" }
+})
+```
+从 `module_list` 中随机选取一个未访问过的 `json_data.uuid`。
+
+**选定后立即输出：**
 ```
 🌀 传送门开启...
 📍 目的地锁定：{destination_name}
 ```
 
-### 📖 探索目的地
+### Step 3 · 读取玩法详情（~200ms）
 
-调用 `read_collection` 获取详情，提取 `collection.remix.launch_prompt.core_input` 作为生图模板。
+```
+feeds.interactiveItem({ collection_uuid: uuid })
+```
+
+提取：
+- `json_data.name` → 目的地名称
+- `json_data.cta_info.launch_prompt.core_input` → prompt 模板（优先）
+- `json_data.cta_info.choices[0].core_input` → 备选
+- 均无时 fallback：`@{character_name}, {destination_name}, 梦幻风格, 高质量插画`
 
 **读取完成后立即输出：**
 ```
 🔍 场景加载完毕，{character_name} 即将登场...
 ```
 
-### 🎨 生成旅行图
+### Step 4 · 构建 Prompt（<1ms）
 
-将 coreInput 中 `{@character}` / `{角色名称}` / `（角色名称）` 替换为 `{character_name}`。
-若 prompt 中无 `@{character_name}`，在开头追加。
-若有 `picture_uuid`，追加 `参考图-全图参考-{picture_uuid}`。
+替换模板占位符：
+- `{@character}` → `@{character_name}`
+- `{角色名称}` / `{角色名}` / `（角色名称）` → `{character_name}`
 
-无 coreInput 时用：`@{character_name}, {destination_name}, 梦幻风格, 高质量插画`
+若替换后 prompt 中不含 `@{character_name}`，在开头追加。
 
-调用 `make_image`（aspect 1:1）。
+若有 `picture_uuid`，在 prompt 末尾追加：`参考图-全图参考-{picture_uuid}`
+
+### Step 5 · 解析 prompt token（~5ms）
+
+```
+prompt.parseVtokens(prompt_text)
+```
+
+返回 vtokens 数组。若报错「搜索关键字过多」，切换到 fallback prompt 重试。
+
+### Step 6 · 提交生图任务（~480ms）
+
+```
+artifact.makeImage({
+  vtokens,
+  make_image_aspect: "1:1",
+  context_model_series: "8_image_edit",
+  inherit_params: { collection_uuid, picture_uuid }
+})
+```
+
+返回 `task_uuid`。
 
 **提交后立即输出：**
 ```
 🎨 画笔落下，旅行画面生成中...
 ```
 
-**轮询要求（全程加速，不空转）：**
-- 提交后立即开始轮询任务状态，每 2 秒检查一次
-- **若超过 30 秒仍未完成，立即输出：**
-  ```
-  ⏳ 画面渲染有点慢，再等一下下，马上就好...
-  ```
-- 之后继续轮询直到完成或超时
+### Step 7 · 轮询等待结果（服务端 10–30s，本地开销极小）
 
-### 🖼️ 展示结果
+```
+artifact.task(task_uuid)  // 每 500ms 轮询一次
+```
+
+状态流转：`PENDING` → `MODERATION` → `SUCCESS` / `FAILURE`
+
+- **超过 30s 未完成**，立即输出：`⏳ 画面渲染有点慢，再等一下下，马上就好...`
+- 并发超限（code 433）：等 5s 后重试，无需告知用户
+- FAILURE：输出 `⚠️ 这一站迷路了，换个目的地重来？` 进入询问
+
+---
+
+## 每一站展示
 
 **生成成功后输出：**
 ```
