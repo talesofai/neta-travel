@@ -20,20 +20,16 @@ description: |
 
 ## 前置条件
 
-1. 已安装 [clawhouse](https://github.com/talesofai/clawhouse)，并完成 `adopt` 领养了一个角色（生成 `SOUL.md`）
-2. 已设置环境变量 `NETA_TOKEN`
-
-```bash
-cd /path/to/clawhouse
-npm install
-```
+1. 已准备好角色档案 `SOUL.md`（含 `形象图片` 字段）—— 可通过 [clawhouse](https://github.com/huxiuhan/clawhouse) 的 `adopt` 命令生成
+2. 已安装本包：`npm install`（仅需 axios + dotenv）
+3. 已设置环境变量 `NETA_TOKEN`
 
 ## 核心命令
 
 ### 自动旅行（随机发现玩法）
 
 ```bash
-npm start -- travel
+node bin/cli.mjs
 ```
 
 自动执行三步：`suggest_content` → `read_collection` → 生成图片
@@ -41,26 +37,26 @@ npm start -- travel
 ### 指定目的地旅行
 
 ```bash
-npm start -- travel --collection_uuid "<玩法UUID>"
+node bin/cli.mjs --collection_uuid "<玩法UUID>"
 ```
 
 ### 指定角色档案
 
 ```bash
-npm start -- travel --soul_path "/path/to/SOUL.md"
+node bin/cli.mjs --soul_path "/path/to/SOUL.md"
 ```
 
 ### 指定图片比例
 
 ```bash
-npm start -- travel --aspect "9:16"
+node bin/cli.mjs --aspect "9:16"
 # 可选：1:1 | 3:4 | 4:3 | 9:16 | 16:9（默认 1:1）
 ```
 
 ### 组合用法
 
 ```bash
-npm start -- travel \
+node bin/cli.mjs \
   --soul_path "./SOUL.md" \
   --collection_uuid "0a7a79e0-27a7-4281-8b2c-66064fa75185" \
   --aspect "9:16"

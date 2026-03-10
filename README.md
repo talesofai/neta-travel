@@ -7,19 +7,33 @@
 ## 快速开始
 
 ```bash
-# 1. 安装 clawhouse
-git clone https://github.com/talesofai/clawhouse.git
-cd clawhouse && npm install
+# 1. 克隆并安装
+git clone https://github.com/talesofai/neta-travel.git
+cd neta-travel && npm install
 
 # 2. 配置 token
 echo "NETA_TOKEN=your_token" > .env
 
-# 3. 领养一个角色
-npm start -- adopt --name "关羽#36d0" --mode lobster
+# 3. 准备角色档案（需先用 clawhouse adopt 生成 SOUL.md）
+# 参考：https://github.com/huxiuhan/clawhouse
 
 # 4. 出发旅行
-npm start -- travel
+node bin/cli.mjs --soul_path /path/to/SOUL.md
 ```
+
+## 命令参数
+
+```
+Options:
+  --soul_path <path>        SOUL.md 文件路径（默认: SOUL.md 或 $SOUL_PATH）
+  --collection_uuid <uuid>  指定目的地玩法（不指定则自动发现）
+  --aspect <ratio>          图片比例 1:1 | 3:4 | 4:3 | 9:16 | 16:9（默认: 1:1）
+  -h, --help                显示帮助
+```
+
+## 依赖
+
+仅需 `axios` + `dotenv`，无其他外部依赖。
 
 ## 作为 Agent Skill 使用
 
@@ -27,7 +41,7 @@ npm start -- travel
 
 ```
 neta-travel/
-├── SKILL.md                          # Agent skill 定义
+├── SKILL.md                          # Agent skill 定义（含主动触发条件）
 └── references/
     ├── travel-workflow.md            # 完整旅行流程
     └── collection-discovery.md      # 玩法发现策略
@@ -37,6 +51,7 @@ neta-travel/
 
 | 玩法 | 效果 |
 |------|------|
+| 霜鳞游梦，龙绡踏浪 | 海底奇幻冒险插画 |
 | 角色的运动报告 | 国风信息图，含步数/热量/距离统计 |
 | 爱你老己明天见 | 多格漫画，描绘角色忙碌的一天 |
 | 角色异化 | 5格渐变，角色逐步溶解成能量体 |
@@ -45,5 +60,4 @@ neta-travel/
 
 ## 相关项目
 
-- [clawhouse](https://github.com/talesofai/clawhouse) — 龙虾领养馆，包含 adopt / travel / house 完整命令
-- [neta-skills](https://github.com/talesofai/neta-skills) — Neta 平台 API 基础 SDK
+- [clawhouse](https://github.com/huxiuhan/clawhouse) — 龙虾领养馆，包含 adopt / travel / house 完整命令
