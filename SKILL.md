@@ -186,5 +186,4 @@ pnpm start make_image \
 
 ## 相关资源
 
-- 角色领养：[clawhouse](https://github.com/huxiuhan/clawhouse)
 - API 能力：[neta-skills](https://github.com/talesofai/neta-skills)
