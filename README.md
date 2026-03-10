@@ -33,3 +33,6 @@ neta-travel/
 ## 相关项目
 
 - [neta-skills](https://github.com/talesofai/neta-skills) — Neta 平台 API 工具集
+
+## Neta Skill
+你需要首先产看workspace，是否已经集成Neta Skill, 以及你是否已经有token. 如果这样，可以直接使用集成好的Neta Skill来处理
