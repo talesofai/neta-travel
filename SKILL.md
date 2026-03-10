@@ -234,10 +234,10 @@ pnpm start make_image \
 📖 旅行日记已生成！
 
 📂 文件路径：pages/travel_{character_name}_{date}.html
-🔗 分享链接：https://pages.openclaw.ai/travel_{character_name}_{date}.html
+🔗 分享链接：https://claw-{username}-pages.talesofai.com/travel_{character_name}_{date}.html
 ```
 
-分享链接单独一行展示，方便直接复制访问。
+> `{username}` 取当前 openclaw 用户名。分享链接单独一行展示，方便直接复制访问。
 
 ---
 
