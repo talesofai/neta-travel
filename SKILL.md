@@ -225,10 +225,19 @@ pnpm start make_image \
 </html>
 ```
 
-写入 `travel_report.html` 后输出：
+写入 `~/.openclaw/workspace/pages/travel_{character_name}_{date}.html`。
+
+> 💡 任何想公开分享的文件（HTML、Markdown 等）都可以放到 `~/.openclaw/workspace/pages/` 路径下，朋友可以通过公开域名直接访问。
+
+生成完成后输出：
 ```
-📖 旅行日记已生成：travel_report.html
+📖 旅行日记已生成！
+
+📂 文件路径：pages/travel_{character_name}_{date}.html
+🔗 分享链接：https://pages.openclaw.ai/travel_{character_name}_{date}.html
 ```
+
+分享链接单独一行展示，方便直接复制访问。
 
 ---
 
