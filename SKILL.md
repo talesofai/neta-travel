@@ -1,7 +1,7 @@
 ---
 name: neta-travel
 description: |
-  让 Neta 角色自动旅行 —— 随机发现平台玩法，连续生成多张旅行图，最终输出 HTML 展示页。
+  让 Neta 角色随机旅行 —— 每次一站，展示图片后询问是否继续，积累 5 张后可生成 HTML 相册。
 
   **主动触发时机（无需用户明确要求）：**
   - 刚完成 adopt 领养角色后，主动提议让 TA 去旅行
@@ -16,55 +16,56 @@ description: |
 
 ## 概览
 
-Agent 作为"旅行规划师"，读取角色档案，连续完成 N 次随机旅行，最后生成一个 HTML 展示页。
-全程只调用 **neta-skills** 工具，无需安装任何额外依赖。
+每次执行**一站旅行**，完成后展示图片并询问用户是否继续。
+积累满 5 张成功图片后，提醒用户可生成 HTML 相册。
 
 ```
-开始
+首次启动
  ├─ 读取 SOUL.md → 获取角色名 + 形象图片UUID
- ├─ 询问旅行次数（默认 5，最多 10）
- └─ 循环 N 次：
-     ├─ suggest_content → 随机选一个玩法
-     ├─ read_collection → 读取玩法详情 + coreInput
-     ├─ 构建 prompt（注入角色 + 参考图）
-     ├─ make_image → 生成旅行图片
-     ├─ 立即输出：站名 + 链接 + 图片URL（Discord 单行展示）
-     └─ 记录结果（玩法名 + 图片URL）
- └─ 生成 HTML 展示页（写入本地文件）
+ └─ 输出开场 → 开始第 1 站
+
+每站流程
+ ├─ suggest_content → 随机选一个玩法
+ ├─ 输出：📍 目的地已发现
+ ├─ read_collection → 读取玩法详情 + coreInput
+ ├─ 输出：🎨 正在生成...
+ ├─ make_image → 生成旅行图片
+ ├─ 输出结果：站名 + 链接 + 图片（Discord 单行）
+ ├─ 记录到本次会话的旅行列表
+ └─ 询问用户：继续旅行？/ 生成相册？/ 结束？
+
+满 5 张时
+ └─ 额外提醒：已可生成旅行相册 HTML
 ```
 
 ---
 
-## Step 0 — 准备
+## Step 0 — 首次启动准备
 
 从 SOUL.md 提取：
 
 | 字段 | 说明 |
 |------|------|
 | `- **名字**: 关羽` | → `character_name` |
-| `- **形象图片**: https://oss.talesofai.cn/picture/<uuid>.webp` | → `picture_uuid`（取 URL 中的 UUID 部分） |
+| `- **形象图片**: https://oss.talesofai.cn/picture/<uuid>.webp` | → `picture_uuid`（取 URL 中的 UUID） |
 
 若 SOUL.md 缺少 `形象图片` 字段，**停止并提示**用户先完成 adopt。
 
-询问用户旅行次数：
-> "要旅行几次？（默认 5 次，最多 10 次）"
-
-**收到次数后立即输出开场反馈：**
+**立即输出开场：**
 ```
 🦞 旅行开始！
 角色：{character_name}
-计划旅行：{N} 次
-正在出发，随机发现目的地...
+正在随机发现第一个目的地...
 ```
 
 ---
 
-## Step 1 — 发现玩法（每次循环）
+## Step 1 — 发现玩法
 
 **调用前输出：**
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━
-🗺️ 第 {round}/{N} 次旅行
+🗺️ 第 {round} 站出发中
 正在随机发现目的地...
 ```
 
@@ -74,7 +75,7 @@ pnpm start suggest_content \
   --scene agent_intent --intent recommend
 ```
 
-从返回的 `module_list` 中**随机选取**一个有效 `uuid`（跳过已访问过的）。
+从返回的 `module_list` 中随机选取一个有效 `uuid`（跳过本次会话已访问过的）。
 
 **选定后立即输出：**
 ```
@@ -83,7 +84,7 @@ pnpm start suggest_content \
 
 ---
 
-## Step 2 — 读取玩法详情（每次循环）
+## Step 2 — 读取玩法详情
 
 ```bash
 pnpm start read_collection --uuid "<collection_uuid>"
@@ -93,38 +94,31 @@ pnpm start read_collection --uuid "<collection_uuid>"
 - `name` → 目的地名称
 - `collection.remix.launch_prompt.core_input` → 生图模板（coreInput）
 
-若 coreInput 为空，fallback 模板：
+若 coreInput 为空，fallback：
 ```
 @{character_name}, {destination_name}, 梦幻风格, 高质量插画
 ```
 
 ---
 
-## Step 3 — 构建 Prompt（每次循环）
+## Step 3 — 构建 Prompt
 
 1. 将 coreInput 中的占位符替换为角色：
    - `{@character}` → `@{character_name}`
-   - `{角色名称}` / `{角色名}` → `{character_name}`
-   - `（角色名称）` → `{character_name}`
+   - `{角色名称}` / `{角色名}` / `（角色名称）` → `{character_name}`
 
-2. 若 prompt 中没有 `@{character_name}`，在开头追加：
-   ```
-   @{character_name}, 参考图-全图参考-{picture_uuid}, {coreInput内容}
-   ```
+2. 若 prompt 中没有 `@{character_name}`，在开头追加。
 
-3. 若有 `picture_uuid`，确保 prompt 包含：
-   ```
-   参考图-全图参考-{picture_uuid}
-   ```
+3. 若有 `picture_uuid`，确保 prompt 包含 `参考图-全图参考-{picture_uuid}`。
 
-**示例 prompt：**
+**示例：**
 ```
-@关羽, 参考图-全图参考-13dab6ed-bd69-4835-83f4-9fef9dd97998, 生成一幅7格漫画，描绘角色忙碌的一天...
+@关羽, 参考图-全图参考-13dab6ed-bd69-4835-83f4-9fef9dd97998, 生成一幅7格漫画...
 ```
 
 ---
 
-## Step 4 — 生成旅行图片（每次循环）
+## Step 4 — 生成图片
 
 **提交前输出：**
 ```
@@ -137,52 +131,47 @@ pnpm start make_image \
   --aspect "1:1"
 ```
 
-等待任务完成（状态从 PENDING → SUCCESS/FAILURE）。
+等待完成（PENDING → SUCCESS/FAILURE）。
 
-**每次生成完成后立即输出结果，不等待后续轮次：**
+---
 
+## Step 5 — 展示结果 + 询问
+
+**成功时输出：**
 ```
-🗺️ 第 {round} 站 · {destination_name}
+✅ 第 {round} 站 · {destination_name}
 🔗 {collection_url}
 ```
 
-图片用 Discord 图片嵌入格式单独一行展示：
+图片单独一行（Discord 自动展开）：
 ```
 {image_url}
 ```
 
-然后继续下一轮旅行。
+**若已累积满 5 张成功图片，额外输出提醒：**
+```
+📸 已完成 5 次旅行！可以输入「生成相册」查看完整旅行日记 HTML。
+```
 
-记录结果供最终 HTML 使用：
+**询问用户下一步：**
+```
+继续旅行 🗺️ / 生成相册 📸 / 结束 👋
+```
+
+记录结果：
 ```json
-{
-  "round": 1,
-  "destination_name": "【捏捏开荒团】爱你老己明天见",
-  "collection_uuid": "2855a5f4-...",
-  "image_url": "https://oss.talesofai.cn/picture/xxx.webp",
-  "status": "SUCCESS"
-}
+{ "round": 1, "destination_name": "...", "collection_uuid": "...", "image_url": "...", "status": "SUCCESS" }
 ```
 
-> ⚠️ 若返回 FAILURE：输出失败提示，继续下一轮，不中断整体流程。
-> ⚠️ 并发上限为 2，每次生成一张，等完成再发下一个。
+> ⚠️ 若 FAILURE：输出失败提示，直接进入询问环节（不计入成功次数）。
+> ⚠️ 并发上限为 2，每次生成一张，等完成再发。
+> ⚠️ code 433：等待 5 秒后重试。
 
 ---
 
-## Step 4.5 — 所有旅行完成后输出汇总
+## Step 6 — 生成 HTML 相册（用户触发）
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━
-✅ {N} 次旅行全部完成！
-成功：{success_count} 次 | 失败：{fail_count} 次
-正在生成旅行日记 HTML...
-```
-
----
-
-## Step 5 — 生成 HTML 展示页（全部完成后）
-
-收集所有成功的旅行结果，写入 `travel_report.html`：
+当用户说「生成相册」/「看相册」/「html」时，用当前会话的所有成功结果生成：
 
 ```html
 <!DOCTYPE html>
@@ -208,7 +197,6 @@ pnpm start make_image \
 <h1>🦞 {character_name} 的旅行日记</h1>
 <p class="subtitle">共完成 {success_count} 次旅行 · {date}</p>
 <div class="grid">
-  <!-- 每张旅行图一个 card，按以下模板重复 -->
   <div class="card">
     <img src="{image_url}" alt="{destination_name}" loading="lazy">
     <div class="card-body">
@@ -221,6 +209,11 @@ pnpm start make_image \
 </html>
 ```
 
+写入 `travel_report.html` 后输出：
+```
+📖 旅行日记已生成：travel_report.html
+```
+
 ---
 
 ## 注意事项
@@ -228,10 +221,10 @@ pnpm start make_image \
 | 情况 | 处理方式 |
 |------|---------|
 | SOUL.md 缺少 `形象图片` | 停止，提示先执行 adopt |
-| 某次生成 FAILURE | 跳过，继续下一轮，HTML 中不展示失败项 |
-| 并发超限（code 433） | 等待 5 秒后重试当前轮 |
+| 生成 FAILURE | 输出提示，进入询问，不计入成功次数 |
+| 并发超限（code 433） | 等待 5 秒后重试 |
 | coreInput 为空 | 用 fallback 通用 prompt |
-| 用户中途打断 | 用已收集的结果生成 HTML |
+| 用户说"结束" | 若有结果则询问是否先生成 HTML |
 
 ---
 
