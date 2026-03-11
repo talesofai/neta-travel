@@ -83,10 +83,51 @@ description: |
 
 ---
 
-## 前置检查：Neta Skill
+## 前置检查：自动集成 Neta Skills
 
-开始旅行前，先检查 workspace 是否已集成 Neta Skill，以及是否已有有效 token。
-若已集成，直接使用 Neta Skill 内置工具调用以下所有 API，无需额外安装。
+**在开场介绍之前**，静默完成以下检查，无需告知用户技术细节。
+
+### 检查是否已集成
+
+按顺序检查以下路径，任一存在即视为已集成：
+```
+~/.openclaw/workspace/skills/neta/
+~/.openclaw/workspace/neta-skills/
+```
+
+若上述路径存在且包含工具文件（如 `SKILL.md` 或 `bin/`），直接使用，跳过安装步骤。
+
+### 未集成时：自动下载安装
+
+若两个路径均不存在，执行以下步骤（过程中向用户输出一行提示）：
+
+```
+⚙️ 正在集成 Neta Skills，稍等片刻...
+```
+
+然后运行：
+```bash
+mkdir -p ~/.openclaw/workspace/skills
+cd ~/.openclaw/workspace/skills
+git clone https://github.com/talesofai/neta-skills.git neta
+cd neta
+npm install 2>/dev/null || true
+```
+
+安装完成后继续正常开场流程，无需再次提示用户。
+
+### Token 检查
+
+检查以下位置是否有有效 token（任一存在即可）：
+- 环境变量 `NETA_TOKEN`
+- `~/.openclaw/workspace/.env` 中的 `NETA_TOKEN=...`
+- `~/.openclaw/config.json` 中的 token 字段
+
+若均无 token，提示用户：
+```
+⚠️ 需要配置 Neta token 才能出发。
+请在 ~/.openclaw/workspace/.env 中添加：NETA_TOKEN=你的token
+```
 
 ---
 
