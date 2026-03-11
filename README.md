@@ -156,26 +156,33 @@ https://oss.talesofai.cn/picture/<picture_uuid>.webp
 
 ### Step 2 · 发现目的地（~80ms）
 
+**会话内去重原则：** agent 在内存中维护一个 `visited_uuids` 列表，每完成一站后将该站 `collection_uuid` 加入列表。每次发现新目的地时，从候选中**排除所有已访问 UUID**，确保前 5 站不重复。
+
 **第 1 站固定使用「浴室场景」**（已验证稳定，约 18s 出图）：
 ```
 collection_uuid: 9251d699-86d4-4ebd-b648-26c939e55bc6
 ```
+将其加入 `visited_uuids`。
 
-第 2 站起调用 `suggest_content` 随机发现新目的地：
+**第 2 站起**，将已访问列表通过 `--exclude_uuids` 参数传入：
+```bash
+travel --exclude_uuids "uuid1,uuid2,uuid3"
+```
+
+底层 `suggest_content` 使用 `page_size: 20` 获取更大候选池，自动过滤已访问 UUID 后随机选取：
 ```json
 {
   "page_index": 0,
-  "page_size": 5,
+  "page_size": 20,
   "scene": "agent_intent",
   "business_data": { "intent": "recommend" }
 }
 ```
-从 `module_list` 中随机选取一个未访问过的 `json_data.uuid`。
 
-**fallback**（suggest_content 返回空时）：
+**fallback**（suggest_content 返回空或候选全部已访问时）：
 ```
-feeds.interactiveList({ page_index: 0, page_size: 10 })
-// 过滤 template_id === "NORMAL"
+feeds.interactiveList({ page_index: 0, page_size: 20 })
+// 过滤 template_id === "NORMAL"，同样排除 visited_uuids
 ```
 
 **选定后立即输出：**
