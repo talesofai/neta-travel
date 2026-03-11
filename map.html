@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>关羽の玩法世界地图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a1a;
+    color: #e0d8c8;
+    font-family: 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  h1 {
+    text-align: center;
+    padding: 32px 0 8px;
+    font-size: 1.8rem;
+    color: #f0c060;
+    letter-spacing: 0.1em;
+    text-shadow: 0 0 20px #f0c06088;
+  }
+  .subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 0.85rem;
+    margin-bottom: 40px;
+  }
+
+  .map {
+    position: relative;
+    width: 960px;
+    max-width: 96vw;
+    height: 620px;
+    margin: 0 auto 60px;
+    background: radial-gradient(ellipse at 50% 50%, #12183a 0%, #06080f 100%);
+    border: 1px solid #2a3060;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  /* starfield */
+  .map::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, #fff6 0%, transparent 100%),
+      radial-gradient(1px 1px at 30% 50%, #fff4 0%, transparent 100%),
+      radial-gradient(1px 1px at 55% 15%, #fff5 0%, transparent 100%),
+      radial-gradient(1px 1px at 75% 70%, #fff3 0%, transparent 100%),
+      radial-gradient(1px 1px at 85% 30%, #fff6 0%, transparent 100%),
+      radial-gradient(1px 1px at 20% 80%, #fff4 0%, transparent 100%),
+      radial-gradient(1px 1px at 90% 85%, #fff5 0%, transparent 100%),
+      radial-gradient(1px 1px at 42% 65%, #fff3 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .pin {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    z-index: 10;
+  }
+  .pin-dot {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid #f0c060;
+    box-shadow: 0 0 16px #f0c06066, 0 0 40px #f0c06022;
+    transition: transform 0.2s, box-shadow 0.2s;
+    background: #111;
+  }
+  .pin-dot img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .pin:hover .pin-dot {
+    transform: scale(1.12);
+    box-shadow: 0 0 28px #f0c060aa, 0 0 60px #f0c06044;
+  }
+  .pin-label {
+    position: absolute;
+    top: 130px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.72rem;
+    color: #f0e8c8;
+    background: #00000099;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid #f0c06044;
+    max-width: 160px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.3;
+    pointer-events: none;
+  }
+  .pin-number {
+    position: absolute;
+    top: -8px; right: -8px;
+    background: #f0c060;
+    color: #111;
+    font-size: 0.65rem;
+    font-weight: bold;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 20;
+  }
+
+  /* connecting lines */
+  svg.lines {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  /* legend */
+  .legend {
+    width: 960px;
+    max-width: 96vw;
+    margin: 0 auto 40px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    padding: 0 12px;
+  }
+  .legend-item {
+    background: #0f1530;
+    border: 1px solid #2a3060;
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .legend-num {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #f0c060;
+    min-width: 24px;
+  }
+  .legend-text strong { display: block; font-size: 0.85rem; color: #f0e8c8; }
+  .legend-text span { font-size: 0.75rem; color: #666; }
+  .legend-thumb {
+    width: 48px; height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid #f0c06044;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<h1>🗺️ 关羽の玩法世界地图</h1>
+<p class="subtitle">通过 travel 命令探索到的玩法目的地 · 共 7 处</p>
+
+<div class="map" id="map">
+  <svg class="lines" id="lines"></svg>
+
+  <!-- pins: top/left as % of map 960x620 -->
+  <!-- 1 --> <div class="pin" style="left:15%;top:30%">
+    <div class="pin-number">1</div>
+    <div class="pin-dot"><img src="6a20942e-fdae-4905-8ecc-5c9e449f5438.webp"></div>
+    <div class="pin-label">【捏捞开荒团】<br>出门太危险了，带上这个吧</div>
+  </div>
+
+  <!-- 2 --> <div class="pin" style="left:38%;top:18%">
+    <div class="pin-number">2</div>
+    <div class="pin-dot"><img src="957fad03-8d8e-4939-ab62-9963a4406918.webp"></div>
+    <div class="pin-label">只是普通的塔罗牌。</div>
+  </div>
+
+  <!-- 3 --> <div class="pin" style="left:62%;top:25%">
+    <div class="pin-number">3</div>
+    <div class="pin-dot"><img src="cff113cb-ef45-4023-9354-ec4f3aa56114.webp"></div>
+    <div class="pin-label">黑与白</div>
+  </div>
+
+  <!-- 4 --> <div class="pin" style="left:82%;top:38%">
+    <div class="pin-number">4</div>
+    <div class="pin-dot"><img src="a8e80e55-2723-4dde-9589-4e4b09ebaff3.webp"></div>
+    <div class="pin-label">【捏捏开荒团】<br>你不要死😭😭</div>
+  </div>
+
+  <!-- 5 --> <div class="pin" style="left:70%;top:65%">
+    <div class="pin-number">5</div>
+    <div class="pin-dot"><img src="4_抓紧我的手，我们一起…….webp"></div>
+    <div class="pin-label">抓紧我的手，<br>我们一起……</div>
+  </div>
+
+  <!-- 6 --> <div class="pin" style="left:38%;top:68%">
+    <div class="pin-number">6</div>
+    <div class="pin-dot"><img src="5_小吉祥草王の软萌时刻🥺.webp"></div>
+    <div class="pin-label">小吉祥草王の<br>软萌时刻🥺</div>
+  </div>
+
+  <!-- 7 --> <div class="pin" style="left:15%;top:65%">
+    <div class="pin-number">7</div>
+    <div class="pin-dot"><img src="5_捏一些美味章鱼🐙❤️.webp"></div>
+    <div class="pin-label">捏一些美味章鱼🐙❤️</div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-num">1</div>
+    <img class="legend-thumb" src="6a20942e-fdae-4905-8ecc-5c9e449f5438.webp">
+    <div class="legend-text">
+      <strong>【捏捞开荒团】出门太危险了，带上这个吧</strong>
+      <span>捏捏系列 · Q版梗图</span>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-num">2</div>
+    <img class="legend-thumb" src="957fad03-8d8e-4939-ab62-9963a4406918.webp">
+    <div class="legend-text">
+      <strong>只是普通的塔罗牌。</strong>
+      <span>塔罗 · 残月BGM</span>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-num">3</div>
+    <img class="legend-thumb" src="cff113cb-ef45-4023-9354-ec4f3aa56114.webp">
+    <div class="legend-text">
+      <strong>黑与白</strong>
+      <span>双色世界</span>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-num">4</div>
+    <img class="legend-thumb" src="a8e80e55-2723-4dde-9589-4e4b09ebaff3.webp">
+    <div class="legend-text">
+      <strong>【捏捏开荒团】你不要死😭😭</strong>
+      <span>捏捏系列 · 双角色互动</span>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-num">5</div>
+    <img class="legend-thumb" src="4_抓紧我的手，我们一起…….webp">
+    <div class="legend-text">
+      <strong>抓紧我的手，我们一起……</strong>
+      <span>情感互动</span>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-num">6</div>
+    <img class="legend-thumb" src="5_小吉祥草王の软萌时刻🥺.webp">
+    <div class="legend-text">
+      <strong>小吉祥草王の软萌时刻🥺</strong>
+      <span>软萌治愈系</span>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-num">7</div>
+    <img class="legend-thumb" src="5_捏一些美味章鱼🐙❤️.webp">
+    <div class="legend-text">
+      <strong>捏一些美味章鱼🐙❤️</strong>
+      <span>美食拟人</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // draw curved lines connecting pins in order
+  const map = document.getElementById('map');
+  const svg = document.getElementById('lines');
+  const pins = [...map.querySelectorAll('.pin')];
+
+  const pts = pins.map(p => {
+    const l = parseFloat(p.style.left) / 100 * 960;
+    const t = parseFloat(p.style.top) / 100 * 620;
+    return { x: l, y: t };
+  });
+
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i+1];
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2 - 40;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`);
+    path.setAttribute('stroke', '#f0c06044');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-dasharray', '6 4');
+    path.setAttribute('fill', 'none');
+    svg.appendChild(path);
+  }
+</script>
+</body>
+</html>
