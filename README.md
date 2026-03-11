@@ -158,13 +158,8 @@ https://oss.talesofai.cn/picture/<picture_uuid>.webp
 
 **会话内去重原则：** agent 在内存中维护一个 `visited_uuids` 列表，每完成一站后将该站 `collection_uuid` 加入列表。每次发现新目的地时，从候选中**排除所有已访问 UUID**，确保前 5 站不重复。
 
-**第 1 站固定使用「浴室场景」**（已验证稳定，约 18s 出图）：
-```
-collection_uuid: 9251d699-86d4-4ebd-b648-26c939e55bc6
-```
-将其加入 `visited_uuids`。
-
-**第 2 站起**，将已访问列表通过 `--exclude_uuids` 参数传入：
+**每一站**均通过 `suggest_content` 随机发现，无固定场景。
+第 1 站完成后，将已访问列表通过 `--exclude_uuids` 参数传入：
 ```bash
 travel --exclude_uuids "uuid1,uuid2,uuid3"
 ```
