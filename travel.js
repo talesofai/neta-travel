@@ -102,42 +102,35 @@ else if (cmd === 'adopt') {
   const search = await api('GET',
     `/v2/travel/parent-search?keywords=${encodeURIComponent(charName)}&parent_type=oc&sort_scheme=exact&page_index=0&page_size=1`);
   const char = search.list?.find(r => r.type === 'oc');
+  if (!char) throw new Error(`Character "${charName}" not found in Neta TCP. Try a different name.`);
 
-  const vtokens = [];
-  if (char) {
-    log(`✅ Character found in TCP: ${char.name} (${char.uuid})`);
-    vtokens.push({ type: 'oc_vtoken_adaptor', uuid: char.uuid, name: char.name, value: char.uuid, weight: 1 });
-    vtokens.push({ type: 'freetext', value: `portrait, white background, simple clean background, looking at viewer`, weight: 1 });
-  } else {
-    log(`⚠️ Character not in TCP — using text prompt only`);
-    vtokens.push({ type: 'freetext', value: `${charName}, portrait, anime style, white background, looking at viewer, masterpiece`, weight: 1 });
+  log(`✅ Found: ${char.name} (${char.uuid})`);
+
+  // 2. Fetch an existing portrait from the character's image feed
+  log('🖼️  Fetching existing portrait...');
+  const feed = await api('GET',
+    `/v1/home/feed/interactive?oc_uuid=${char.uuid}&page_index=0&page_size=10`);
+
+  let imageUrl = null;
+  for (const m of (feed.module_list ?? [])) {
+    for (const page of (m.json_data?.displayData?.pages ?? [])) {
+      for (const img of (page.images ?? [])) {
+        if (img.url?.includes('/picture/') && img.url?.endsWith('.webp')) {
+          imageUrl = img.url;
+          break;
+        }
+      }
+      if (imageUrl) break;
+    }
+    if (imageUrl) break;
   }
 
-  // 2. Generate portrait
-  log('🎨 Generating portrait...');
-  const taskUuid = await api('POST', '/v3/make_image', {
-    storyId: 'DO_NOT_USE', jobType: 'universal',
-    rawPrompt: vtokens,
-    width: 576, height: 768,
-    meta: { entrance: 'PICTURE,VERSE' },
-    context_model_series: '8_image_edit',
-  });
-  const task_uuid = typeof taskUuid === 'string' ? taskUuid : taskUuid?.task_uuid;
-  log(`⏳ task: ${task_uuid}`);
+  if (!imageUrl) throw new Error(`No existing portrait found for "${charName}". Check the character name or try again.`);
 
-  // 3. Poll
-  const result = await pollTask(task_uuid);
-  if (result.task_status !== 'SUCCESS' || !result.artifacts?.[0]?.url) {
-    throw new Error(`Portrait generation failed: ${result.task_status}`);
-  }
-
-  const imageUrl = result.artifacts[0].url;
   const picUuid = imageUrl.match(/\/picture\/([0-9a-f-]{36})/)?.[1];
-  if (!picUuid) throw new Error(`Unexpected image URL format: ${imageUrl}`);
+  log(`✅ Portrait found: ${imageUrl}`);
 
-  log(`✅ Portrait generated: ${imageUrl}`);
-
-  // 4. Write SOUL.md
+  // 3. Write SOUL.md
   const today = new Date().toISOString().slice(0, 10);
   const soulContent = `# SOUL.md — ${charName}\n\n## 我的身份\n\n- **名字**: ${charName}\n- **领养日期**: ${today}\n- **形象图片**: ${imageUrl}\n`;
 

@@ -67,7 +67,7 @@ Switch only if user explicitly requests it.
 travel adopt "{character_name}"  →  { name, picture_uuid, soul_path, image_url }
 ```
 
-If SOUL.md is missing or has no `形象图片`, run adopt first. Searches TCP for character, generates a portrait, writes SOUL.md automatically. ~30–60s one-time cost.
+If SOUL.md is missing or has no `形象图片`, run adopt first. Searches TCP for character, picks an existing portrait from the character's image feed (instant — no generation), writes SOUL.md automatically. ~2s.
 
 ### Step 1 · Read character (silent, <1ms)
 
@@ -239,7 +239,8 @@ Offer re-customization: `Want a different style? Just describe it ✨`
 |-------|-------|-----|
 | SOUL.md not found | adopt not run | `travel adopt "<name>"` |
 | `task_status: FAILURE` | Missing/invalid picture_uuid | Re-run adopt to get valid portrait |
-| Portrait generation failed | TCP lookup failed + bad prompt | Try exact character name |
+| Character not found in TCP | Wrong name or not in Neta DB | Try exact CN/EN name |
+| No existing portrait found | Character has no public images | Try a different character name |
 | code 433 | Concurrent limit | Auto-retry after 5s |
 | HTTP 4xx on gen | Expired token | Refresh NETA_TOKEN |
 | No destinations found | Empty API response | Check token / network, retry |
