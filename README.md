@@ -41,6 +41,13 @@ git clone https://github.com/talesofai/neta-travel.git && cd neta-travel
 All commands below run as `node ~/.openclaw/workspace/skills/neta-travel/travel.js <cmd>`.
 Shorthand in this doc: `travel <cmd>`.
 
+**Adopt (if no SOUL.md or no portrait image):**
+```bash
+travel adopt "<character_name>"
+```
+Looks up the character in the TCP database, generates a portrait image, and writes `~/developer/clawhouse/SOUL.md`.
+Custom path: `travel adopt "<name>" /path/to/SOUL.md`
+
 ---
 
 ## Language
@@ -54,6 +61,14 @@ Switch only if user explicitly requests it.
 
 > Output feedback after each step immediately.
 
+### Step 0 · Adopt (if no SOUL.md, silent)
+
+```
+travel adopt "{character_name}"  →  { name, picture_uuid, soul_path, image_url }
+```
+
+If SOUL.md is missing or has no `形象图片`, run adopt first. Searches TCP for character, generates a portrait, writes SOUL.md automatically. ~30–60s one-time cost.
+
 ### Step 1 · Read character (silent, <1ms)
 
 ```
@@ -62,7 +77,7 @@ travel soul  →  { name, picture_uuid }
 
 Reads SOUL.md. Extracts `名字` → `character_name`, `形象图片` UUID → `picture_uuid`.
 
-> ⚠️ Missing `形象图片` = no reference image = generation FAILURE. Run adopt first.
+> ⚠️ Missing `形象图片` = no reference image = generation FAILURE. Run Step 0 first.
 
 ### Step 2 · Generate world context (LLM, no API)
 
@@ -222,8 +237,9 @@ Offer re-customization: `Want a different style? Just describe it ✨`
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| Character not in SOUL.md | adopt not run | Run adopt first |
-| `task_status: FAILURE` | Missing picture_uuid | Ensure SOUL.md has `形象图片` |
+| SOUL.md not found | adopt not run | `travel adopt "<name>"` |
+| `task_status: FAILURE` | Missing/invalid picture_uuid | Re-run adopt to get valid portrait |
+| Portrait generation failed | TCP lookup failed + bad prompt | Try exact character name |
 | code 433 | Concurrent limit | Auto-retry after 5s |
 | HTTP 4xx on gen | Expired token | Refresh NETA_TOKEN |
 | No destinations found | Empty API response | Check token / network, retry |

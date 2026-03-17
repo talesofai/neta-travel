@@ -4,15 +4,16 @@
  *
  * Commands:
  *   node travel.js soul [soul_path]                    → {name, picture_uuid}
+ *   node travel.js adopt <char_name> [soul_path]       → writes SOUL.md, {name, picture_uuid}
  *   node travel.js suggest [exclude_csv]               → {uuid, name}
  *   node travel.js gen <char_name> <pic_uuid> <uuid>   → {scene, status, url, collection_uuid}
  *
  * Token: NETA_TOKEN env → ~/.openclaw/workspace/.env → ~/developer/clawhouse/.env
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
 
 const BASE = 'https://api.talesofai.cn';
 
@@ -49,6 +50,21 @@ const log = msg => process.stderr.write(msg + '\n');
 const out = data => console.log(JSON.stringify(data));
 const [,, cmd, ...args] = process.argv;
 
+// ── poll helper ───────────────────────────────────────────────────────────────
+
+async function pollTask(task_uuid, maxMs = 180000) {
+  const interval = 500;
+  const maxIter = maxMs / interval;
+  let warnedSlow = false;
+  for (let i = 0; i < maxIter; i++) {
+    await new Promise(r => setTimeout(r, interval));
+    if (!warnedSlow && i >= 60) { log('⏳ Rendering is taking a bit longer, almost there...'); warnedSlow = true; }
+    const result = await api('GET', `/v1/artifact/task/${task_uuid}`);
+    if (result.task_status !== 'PENDING' && result.task_status !== 'MODERATION') return result;
+  }
+  return { task_status: 'TIMEOUT', artifacts: [] };
+}
+
 // ── soul ─────────────────────────────────────────────────────────────────────
 
 if (cmd === 'soul') {
@@ -62,15 +78,74 @@ if (cmd === 'soul') {
   for (const p of paths) {
     try { content = readFileSync(p, 'utf8'); break; } catch { /* try next */ }
   }
-  if (!content) throw new Error('SOUL.md not found. Run adopt first.');
+  if (!content) throw new Error('SOUL.md not found. Run: travel adopt "<name>"');
 
   const name = content.match(/名字[^：:\n]*[：:]\s*([^\n*]+)/)?.[1]
     ?.trim().replace(/（龙虾化）$/, '').replace(/\*+/g, '');
   const picUuid = content
     .match(/\/picture\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/)?.[1];
 
-  if (!name) throw new Error('No 名字 field in SOUL.md. Run adopt first.');
+  if (!name) throw new Error('No 名字 field in SOUL.md. Run: travel adopt "<name>"');
   out({ name, picture_uuid: picUuid ?? null });
+}
+
+// ── adopt ─────────────────────────────────────────────────────────────────────
+
+else if (cmd === 'adopt') {
+  const charName = args[0];
+  if (!charName) throw new Error('Usage: travel.js adopt "<character_name>" [soul_path]');
+  const soulPath = args[1] ?? resolve(homedir(), 'developer/clawhouse/SOUL.md');
+
+  log(`🔍 Looking up character: ${charName}`);
+
+  // 1. Search TCP for character
+  const search = await api('GET',
+    `/v2/travel/parent-search?keywords=${encodeURIComponent(charName)}&parent_type=oc&sort_scheme=exact&page_index=0&page_size=1`);
+  const char = search.list?.find(r => r.type === 'oc');
+
+  const vtokens = [];
+  if (char) {
+    log(`✅ Character found in TCP: ${char.name} (${char.uuid})`);
+    vtokens.push({ type: 'oc_vtoken_adaptor', uuid: char.uuid, name: char.name, value: char.uuid, weight: 1 });
+    vtokens.push({ type: 'freetext', value: `portrait, white background, simple clean background, looking at viewer`, weight: 1 });
+  } else {
+    log(`⚠️ Character not in TCP — using text prompt only`);
+    vtokens.push({ type: 'freetext', value: `${charName}, portrait, anime style, white background, looking at viewer, masterpiece`, weight: 1 });
+  }
+
+  // 2. Generate portrait
+  log('🎨 Generating portrait...');
+  const taskUuid = await api('POST', '/v3/make_image', {
+    storyId: 'DO_NOT_USE', jobType: 'universal',
+    rawPrompt: vtokens,
+    width: 576, height: 768,
+    meta: { entrance: 'PICTURE,VERSE' },
+    context_model_series: '8_image_edit',
+  });
+  const task_uuid = typeof taskUuid === 'string' ? taskUuid : taskUuid?.task_uuid;
+  log(`⏳ task: ${task_uuid}`);
+
+  // 3. Poll
+  const result = await pollTask(task_uuid);
+  if (result.task_status !== 'SUCCESS' || !result.artifacts?.[0]?.url) {
+    throw new Error(`Portrait generation failed: ${result.task_status}`);
+  }
+
+  const imageUrl = result.artifacts[0].url;
+  const picUuid = imageUrl.match(/\/picture\/([0-9a-f-]{36})/)?.[1];
+  if (!picUuid) throw new Error(`Unexpected image URL format: ${imageUrl}`);
+
+  log(`✅ Portrait generated: ${imageUrl}`);
+
+  // 4. Write SOUL.md
+  const today = new Date().toISOString().slice(0, 10);
+  const soulContent = `# SOUL.md — ${charName}\n\n## 我的身份\n\n- **名字**: ${charName}\n- **领养日期**: ${today}\n- **形象图片**: ${imageUrl}\n`;
+
+  mkdirSync(dirname(soulPath), { recursive: true });
+  writeFileSync(soulPath, soulContent, 'utf8');
+  log(`📝 SOUL.md written to: ${soulPath}`);
+
+  out({ name: charName, picture_uuid: picUuid, soul_path: soulPath, image_url: imageUrl });
 }
 
 // ── suggest ───────────────────────────────────────────────────────────────────
@@ -164,21 +239,12 @@ else if (cmd === 'gen') {
   const task_uuid = typeof taskUuid === 'string' ? taskUuid : taskUuid?.task_uuid;
   log(`⏳ task: ${task_uuid}`);
 
-  // 5. Poll every 2s (max 3 min)
-  let warnedSlow = false;
-  for (let i = 0; i < 90; i++) {
-    await new Promise(r => setTimeout(r, 2000));
-    if (!warnedSlow && i >= 14) { log('⏳ Rendering is taking a bit longer, almost there...'); warnedSlow = true; }
-    const result = await api('GET', `/v1/artifact/task/${task_uuid}`);
-    if (result.task_status !== 'PENDING' && result.task_status !== 'MODERATION') {
-      out({ scene: sceneName, task_uuid, status: result.task_status, url: result.artifacts?.[0]?.url ?? null, collection_uuid: collectionUuid });
-      process.exit(0);
-    }
-  }
-  out({ scene: sceneName, task_uuid, status: 'TIMEOUT', url: null, collection_uuid: collectionUuid });
+  // 5. Poll every 500ms (max 3 min)
+  const result = await pollTask(task_uuid);
+  out({ scene: sceneName, task_uuid, status: result.task_status, url: result.artifacts?.[0]?.url ?? null, collection_uuid: collectionUuid });
 }
 
 else {
-  process.stderr.write('Usage: node travel.js soul | suggest [exclude_csv] | gen <char_name> <pic_uuid> <collection_uuid>\n');
+  process.stderr.write('Usage: node travel.js soul | adopt <name> [soul_path] | suggest [exclude_csv] | gen <char_name> <pic_uuid> <collection_uuid>\n');
   process.exit(1);
 }
