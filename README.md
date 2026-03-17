@@ -1,58 +1,38 @@
 ---
 name: neta-travel
 description: |
-  Take a Neta character on a random adventure — one stop at a time, collect 5 stops to generate a travel atlas.
+  After adopting a character (or on heartbeat/manual trigger), take the character on a Neta world
+  adventure — find a matching world, explore curated scenes, generate one personalized image per stop,
+  collect 5 stops to unlock an interactive travel atlas.
 
-  **Auto-trigger (no explicit request needed):**
-  - Right after completing adopt
-  - User mentions: travel / explore / let's go / take me somewhere / random
+  **Auto-trigger:**
+  - After adopt completes and user clicks "Explore this world"
+  - User mentions: travel / explore / let's go / wander / random
   - User says "more" / "continue" in a travel image context
 
-  **Prerequisites:** SOUL.md with character name + portrait image field; neta-skills configured.
+  **Prerequisites:** SOUL.md with character name + portrait image; neta-skills configured.
   **Stream feedback after each step — don't batch.**
-  **Speed:** Push forward immediately. If image poll exceeds 30s, output a waiting message.
-  **Language:** Match trigger language (Chinese → Chinese, English → English). Stick to it unless user switches.
-  **Interaction:** All next-step choices must be clickable quick-reply buttons. Click sends `@{bot_name} {option}`.
+  **Speed:** Push forward immediately. If image poll >30s, output a waiting message.
+  **Language:** Match trigger language. Stick to it unless user switches.
+  **Interaction:** All next-step choices as clickable quick-reply buttons. Click sends `@{bot_name} {option}`.
+  **Output:** Character dialogue and images output directly. Narration/system messages use discord plugin.
 ---
 
 # Neta Travel
 
-Auto-travel a Neta character — random scene discovery, personalized image generation, 5 stops unlock an interactive travel atlas.
+Take a Neta character into a world that matches their soul — explore curated scenes, generate personalized travel images, collect 5 stops to unlock an interactive atlas.
 
 **Related:** [neta-skills](https://github.com/talesofai/neta-skills)
 
 ---
 
-## Opening
+## Language
 
-Read SOUL.md silently. Output immediately on trigger (don't wait for read):
-```
-🦞 On it! Waking up the character...
-```
-
-Once character name is read:
-```
-══════════════════════════════════════
-🌍 Neta World Map loading...
-
-500+ scenes waiting — battlefields, bathrooms, dreamscapes, deep sea...
-Every stop is a random warp. You never know where you'll land next.
-
-One personalized image per stop. Hit 5 stops to unlock your Travel Atlas 📖.
-
-Current character: {character_name}
-══════════════════════════════════════
-Go with {character_name}, or swap characters?
-```
-
-Buttons: `Go with {character_name} 🚀` → `@{bot_name} go` · `Swap character 🔄` → `@{bot_name} swap`
-
-On confirm: `✨ {character_name} is ready! Stop 1, let's go!`
-On swap: prompt user to run adopt first.
+Detect from trigger word before first output: Chinese → Chinese, English → English, other → follow user. Switch only if user explicitly requests it.
 
 ---
 
-## Pre-flight Checks (silent)
+## Pre-flight (silent)
 
 **Neta Skills:** Check `~/.openclaw/workspace/skills/neta/` or `~/.openclaw/workspace/neta-skills/`. If missing, output `⚙️ Integrating Neta Skills...` then:
 ```bash
@@ -71,30 +51,71 @@ git clone https://github.com/talesofai/neta-skills.git neta && cd neta && npm in
 
 > Output feedback after each step immediately. Don't wait for all steps to finish.
 
-### Step 1 · Read character (<1ms)
+### Step 1 · Read character (silent, local)
 
 From SOUL.md:
 - `名字` → `character_name` (strip trailing `（龙虾化）`)
-- `形象图片` or `龙虾图片` URL → extract UUID segment → `picture_uuid`
+- `形象图片` or `龙虾图片` URL → extract UUID → `picture_uuid`
+- Other fields (personality, background, tags) → used for world matching
 
 > ⚠️ Missing `形象图片` = no reference image = generation FAILURE. Run adopt first.
 
-### Step 2 · Find destination
+### Step 2 · Find matching world
+
+Using neta-skills world search, find the world that best fits the character's personality, background, and tags. Extract:
+- Total worlds in Neta universe → `world_count`
+- Matched world name → `world_name`
+- World description → `world_description` (2–4 paragraphs: setting, rules, atmosphere, character fit)
+
+### Step 3 · Opening (segmented output)
+
+**Segment 1:**
+```
+╔══════════════════════════════════════════════╗
+║           N E T A   U N I V E R S E          ║
+╚══════════════════════════════════════════════╝
+
+  Worlds mapped: {world_count}
+  Every world holds a story waiting to happen.
+```
+
+**Segment 2:**
+```
+  ────────────────────────────────────────────
+  Scanning soul frequency for {character_name}...
+  ████████████████████████  Match found
+  ────────────────────────────────────────────
+```
+
+**Segment 3:**
+```
+  ╔══════════════════════════════════════════╗
+  ║  World: {world_name}                     ║
+  ╚══════════════════════════════════════════╝
+```
+
+Output `world_description` paragraphs one by one, each as a separate message.
+
+**Segment 4:**
+```
+  ════════════════════════════════════════════
+  {character_name} and this world share an inexplicable gravity.
+  ════════════════════════════════════════════
+```
+
+Button: `Explore 🌀` → `@{bot_name} explore`
+
+---
+
+## Exploration (after user clicks Explore)
+
+### Step 4 · Find destination
 
 Maintain `visited_uuids` in memory. Exclude on every call.
 
-**Priority 1 — local `scenes.json` (zero API calls):**
-Read `scenes.json` (same directory as this skill). Filter out `visited_uuids`. Score remaining entries against the character's SOUL.md tags:
-- `content_tags` overlap with character personality/setting → +2 per match
-- `tax_paths` overlap → +1 per match
+`suggest_content({ page_size:20, scene:"agent_intent", intent:"recommend" })` — filter `visited_uuids`, pick randomly from remaining.
 
-Pick the highest-scoring unvisited entry (random tiebreak). Each entry has a pre-resolved `collection_uuid` — use it directly for Steps 3–5.
-
-**Priority 2 — online API (fallback when `scenes.json` exhausted):**
-```json
-suggest_content({ "page_index":0, "page_size":20, "scene":"agent_intent", "business_data":{"intent":"recommend"} })
-```
-Fallback to `feeds.interactiveList({ page_index:0, page_size:20 })` filtered to `template_id === "NORMAL"` if that returns empty.
+Fallback: `feeds.interactiveList({ page_size:20 })` filtered to `template_id === "NORMAL"`.
 
 Output:
 ```
@@ -102,35 +123,35 @@ Output:
 📍 Destination locked: {destination_name}
 ```
 
-### Step 3 · Load scene (~200ms)
+### Step 5 · Load scene (~200ms)
 
 `feeds.interactiveItem({ collection_uuid })`
 
-Extract prompt template (in order): `cta_info.launch_prompt.core_input` → `cta_info.choices[0].core_input` → fallback: `@{character_name}, {destination_name}, fantasy style, high quality illustration`
+Extract prompt template: `cta_info.launch_prompt.core_input` → `cta_info.choices[0].core_input` → fallback: `@{character_name}, {world_name}, {destination_name}, high quality illustration`
 
-### Step 4 · Build prompt + resolve character vtoken (<100ms)
+### Step 6 · Build prompt + resolve character vtoken (<100ms)
 
-**Replace placeholders in template:**
+**Replace placeholders:**
 
 | Placeholder | Replace with |
 |-------------|-------------|
 | `{@character}` | `@{character_name}` |
 | `{角色名称}` / `{角色名}` / `（角色名称）` | `{character_name}` |
 
-If result doesn't contain `@{character_name}`, prepend it.
+Prepend `@{character_name}` if not present.
 
 **Resolve character TCP UUID for precise image binding:**
 ```
 GET /v2/travel/parent-search?keywords={character_name}&parent_type=oc&sort_scheme=exact&page_index=0&page_size=1
 ```
 
-**Build vtokens array:**
-- If character found: add `{ type:"oc_vtoken_adaptor", uuid:char.uuid, name:char.name, value:char.uuid, weight:1 }`, then strip `@{character_name}` from prompt text
-- Strip any `参考图-*` / `图片捏-*` tokens from text (picture reference goes via `inherit_params` instead)
-- Remaining text (if any): add `{ type:"freetext", value:promptText, weight:1 }`
-- If character not found: fallback to `prompt.parseVtokens(promptText)`. On "too many keywords" error, retry with fallback prompt.
+Build vtokens:
+- If found: `{ type:"oc_vtoken_adaptor", uuid, name, value:uuid, weight:1 }`, strip `@{character_name}` from text
+- Strip `参考图-*` / `图片捏-*` tokens (picture ref goes via `inherit_params`)
+- Remaining text → `{ type:"freetext", value:text, weight:1 }`
+- If not found: fallback to `prompt.parseVtokens(text)`. On "too many keywords" error, retry with simple prompt.
 
-### Step 5 · Submit image (~480ms)
+### Step 7 · Submit image (~480ms)
 
 ```json
 artifact.makeImage({
@@ -143,7 +164,7 @@ artifact.makeImage({
 
 Output: `🎨 Painting the scene...`
 
-### Step 6 · Poll result (10–30s server-side)
+### Step 8 · Poll result (10–30s server-side)
 
 `artifact.task(task_uuid)` every 500ms. States: `PENDING → MODERATION → SUCCESS / FAILURE`
 
@@ -157,32 +178,32 @@ Output: `🎨 Painting the scene...`
 
 On SUCCESS, output in this order:
 
-**1. Character scene simulation (before image):**
+**1. Character scene (before image):**
 ```
 🎭 [{destination_name}]
 
-{1–2 sentences: environment and atmosphere as the character arrives}
+{1–2 sentences: environment and atmosphere on arrival}
 
 {character_name}: {first-person reaction matching SOUL.md personality and speech style}
 ({action/expression, 1 sentence})
 ```
 
-**2. Station header + image URL (URL on its own line — Discord auto-embeds):**
+**2. Header + image (URL on its own line — auto-embeds):**
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Stop {round} · {destination_name}
 {image_url}
 ```
 
-**3. Progress bar + message:**
+**3. Progress:**
 
 | Stop | Bar | Message |
 |------|-----|---------|
-| 1 | `▓░░░░  1/5` | 🌟 Stop 1 done! 4 more to unlock your atlas. Keep going? |
-| 2 | `▓▓░░░  2/5` | ✨ Two stops in! Atlas is getting closer~ |
+| 1 | `▓░░░░  1/5` | 🌟 Stop 1! 4 more to unlock your atlas. Keep going? |
+| 2 | `▓▓░░░  2/5` | ✨ Two in! Atlas is getting closer~ |
 | 3 | `▓▓▓░░  3/5` | 🔥 Halfway! Two more and the atlas is yours! |
-| 4 | `▓▓▓▓░  4/5` | ⚡ One stop away! The atlas is within reach! |
-| 5+ | `▓▓▓▓▓  5/5 🎉` | Atlas unlocked! Type "generate atlas" to seal this adventure, or keep exploring~ |
+| 4 | `▓▓▓▓░  4/5` | ⚡ One stop away! Atlas within reach! |
+| 5+ | `▓▓▓▓▓  5/5 🎉` | Atlas unlocked! Type "generate atlas" or keep exploring~ |
 
 **4. Buttons:**
 
@@ -196,25 +217,22 @@ Stop {round} · {destination_name}
 
 Triggers on: "generate atlas" / "atlas" / "gallery" / "html"
 
-Ask for style first:
+Ask for style preference:
 ```
 What style for the atlas? (skip = default map)
 e.g. retro film / starmap / pixel game / minimal white...
 ```
 
-**Default — interactive map:** Each stop's image is a landmark on an adventure-style map (parchment / pixel / star chart). Click any landmark to expand image + destination name + scene link + stop number. Match the map vibe to the character.
+**Default — interactive map:** Each stop's image is a landmark on an adventure-style map (parchment / pixel / star chart). Click any landmark to expand image + destination name + scene link + stop number. Match map vibe to character.
 
-**Custom style:** Any layout (gallery, card wall, timeline, magazine). Keep click-to-expand interaction.
+**Custom:** Any layout (gallery, card wall, timeline, magazine). Keep click-to-expand interaction.
 
-Save to `~/.openclaw/workspace/pages/travel_{character_name}_{date}.html`
-
-After saving, ask for username once per session:
+Save to `~/.openclaw/workspace/pages/travel_{character_name}_{date}.html`. Ask for username once per session → output share link on its own line:
 ```
-📖 {character_name}'s travel atlas is sealed!
-Your pages username? → https://claw-{username}-pages.talesofai.com
+🔗 https://claw-{username}-pages.talesofai.com/travel_{character_name}_{date}.html
 ```
 
-Output share link on its own line. Reuse username if already given this session. Offer re-customization: `Want a different style? Just describe it ✨`
+Offer re-customization after each generation: `Want a different style? Just describe it ✨`
 
 ---
 
@@ -227,14 +245,4 @@ Output share link on its own line. Reuse username if already given this session.
 | code 433 | Concurrent limit | Auto-retry after 5s |
 | "Too many keywords" | Prompt too long | Auto-fallback to simple prompt |
 | No scenes found | Empty API / expired token | Retry |
-
-## Common Scene UUIDs
-
-| Scene | UUID |
-|-------|------|
-| Bathroom scene (good first stop) | `9251d699-86d4-4ebd-b648-26c939e55bc6` |
-| Character sports report | `0a7a79e0-27a7-4281-8b2c-66064fa75185` |
-| Multi-panel comic | `2855a5f4-1878-4d92-b901-0a44cb7f5582` |
-| Character transformation | `02946196-14c6-4340-a053-a80785271c39` |
-| Too dangerous to go alone | `b98f6742-bb2e-4463-9575-48061dccc769` |
-| Black and white | `a6eb5bb7-7017-4d0a-8522-446ef5e98c0c` |
+| World search no result | Sparse character tags | Use default recommended world |
