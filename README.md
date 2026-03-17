@@ -79,15 +79,22 @@ From SOUL.md:
 
 > ⚠️ Missing `形象图片` = no reference image = generation FAILURE. Run adopt first.
 
-### Step 2 · Find destination (~80ms)
+### Step 2 · Find destination
 
 Maintain `visited_uuids` in memory. Exclude on every call.
 
+**Priority 1 — local `scenes.json` (zero API calls):**
+Read `scenes.json` (same directory as this skill). Filter out `visited_uuids`. Score remaining entries against the character's SOUL.md tags:
+- `content_tags` overlap with character personality/setting → +2 per match
+- `tax_paths` overlap → +1 per match
+
+Pick the highest-scoring unvisited entry (random tiebreak). Each entry has a pre-resolved `collection_uuid` — use it directly for Steps 3–5.
+
+**Priority 2 — online API (fallback when `scenes.json` exhausted):**
 ```json
 suggest_content({ "page_index":0, "page_size":20, "scene":"agent_intent", "business_data":{"intent":"recommend"} })
 ```
-
-Fallback if empty or all visited: `feeds.interactiveList({ page_index:0, page_size:20 })` filtered to `template_id === "NORMAL"`.
+Fallback to `feeds.interactiveList({ page_index:0, page_size:20 })` filtered to `template_id === "NORMAL"` if that returns empty.
 
 Output:
 ```
